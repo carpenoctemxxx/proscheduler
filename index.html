@@ -1,19 +1,1211 @@
-<!doctype html>
-<html>
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width" />
-		<title>My static Space</title>
-		<link rel="stylesheet" href="style.css" />
-	</head>
-	<body>
-		<div class="card">
-			<h1>Welcome to your static Space!</h1>
-			<p>You can modify this app directly by editing <i>index.html</i> in the Files and versions tab.</p>
-			<p>
-				Also don't forget to check the
-				<a href="https://huggingface.co/docs/hub/spaces" target="_blank">Spaces documentation</a>.
-			</p>
-		</div>
-	</body>
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeBlocks | Minimalist Time Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta name="theme-color" content="#1e293b">
+    <link rel="manifest" href="/manifest.json">
+    <style>
+        @media (max-width: 640px) {
+            .time-block {
+                grid-template-columns: 1fr 2fr 1fr;
+            }
+        }
+        
+        .time-input::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            opacity: 0.6;
+        }
+        
+        .pomodoro-tab.active {
+            border-bottom: 2px solid #3b82f6;
+            color: #3b82f6;
+        }
+        
+        .task-status-select {
+            background-color: #1e293b;
+            color: white;
+            border: 1px solid #334155;
+            border-radius: 0.375rem;
+            padding: 0.25rem 0.5rem;
+        }
+        
+        /* Animation for task completion */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .task-item {
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        /* Pulse animation for active timer */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .timer-active {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+    <div id="app" class="container mx-auto px-4 py-6 max-w-4xl">
+        <!-- Auth Screen -->
+        <div id="auth-screen" class="text-center py-20">
+            <h1 class="text-4xl font-bold mb-6 text-blue-400">TimeBlocks</h1>
+            <p class="mb-10 text-slate-400">Minimalist time management for focused productivity</p>
+            
+            <div id="login-form" class="max-w-md mx-auto bg-slate-800 p-8 rounded-lg shadow-lg">
+                <h2 class="text-2xl font-semibold mb-6">Access Your Account</h2>
+                <div class="mb-4">
+                    <label for="private-key" class="block text-left mb-2 text-slate-300">Your Private Key</label>
+                    <textarea id="private-key" rows="4" class="w-full bg-slate-700 border border-slate-600 rounded-md p-3 text-sm font-mono" placeholder="Paste your private key here"></textarea>
+                </div>
+                <button id="login-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition mb-4">
+                    <i class="fas fa-sign-in-alt mr-2"></i> Login
+                </button>
+                <button id="new-account-btn" class="text-blue-400 hover:text-blue-300 text-sm">
+                    <i class="fas fa-plus-circle mr-1"></i> Create New Account
+                </button>
+            </div>
+            
+            <div id="new-account-form" class="max-w-md mx-auto bg-slate-800 p-8 rounded-lg shadow-lg hidden">
+                <h2 class="text-2xl font-semibold mb-6">Your New Account</h2>
+                <div class="mb-6 p-4 bg-slate-700 rounded-md border border-yellow-500">
+                    <p class="text-yellow-400 mb-3 font-medium"><i class="fas fa-exclamation-triangle mr-2"></i> Important!</p>
+                    <p class="text-sm text-slate-300 mb-2">This is your private key. Copy and save it securely. It's your only way to access your account.</p>
+                    <p class="text-sm text-slate-400">If you lose this key, you will lose access to your data.</p>
+                </div>
+                <div class="mb-6">
+                    <div class="bg-slate-700 p-4 rounded-md border border-slate-600">
+                        <p id="generated-key" class="font-mono text-sm break-all mb-3"></p>
+                        <button id="copy-key-btn" class="bg-slate-600 hover:bg-slate-500 text-white py-1 px-3 rounded text-sm">
+                            <i class="far fa-copy mr-1"></i> Copy to Clipboard
+                        </button>
+                    </div>
+                </div>
+                <button id="continue-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition">
+                    <i class="fas fa-check-circle mr-2"></i> I've Saved My Key - Continue
+                </button>
+            </div>
+        </div>
+        
+        <!-- Main App (hidden by default) -->
+        <div id="main-app" class="hidden">
+            <!-- Header -->
+            <header class="flex justify-between items-center mb-8">
+                <div>
+                    <h1 class="text-2xl font-bold text-blue-400">TimeBlocks</h1>
+                    <p id="current-date" class="text-sm text-slate-400"></p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="calendar-toggle" class="bg-slate-800 hover:bg-slate-700 p-2 rounded-full">
+                        <i class="far fa-calendar-alt"></i>
+                    </button>
+                    <button id="settings-toggle" class="bg-slate-800 hover:bg-slate-700 p-2 rounded-full">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button id="logout-btn" class="bg-slate-800 hover:bg-slate-700 p-2 rounded-full text-red-400">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </header>
+            
+            <!-- Calendar Modal -->
+            <div id="calendar-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+                <div class="bg-slate-800 rounded-lg p-6 w-full max-w-md">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold">Calendar</h2>
+                        <button id="close-calendar" class="text-slate-400 hover:text-white">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="mb-4 flex justify-between">
+                        <button id="prev-month" class="p-2 hover:bg-slate-700 rounded">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <h3 id="current-month" class="text-lg font-medium"></h3>
+                        <button id="next-month" class="p-2 hover:bg-slate-700 rounded">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                    <div id="calendar-grid" class="grid grid-cols-7 gap-1 mb-4">
+                        <!-- Days of week header -->
+                        <div class="text-center font-medium text-sm py-1">Sun</div>
+                        <div class="text-center font-medium text-sm py-1">Mon</div>
+                        <div class="text-center font-medium text-sm py-1">Tue</div>
+                        <div class="text-center font-medium text-sm py-1">Wed</div>
+                        <div class="text-center font-medium text-sm py-1">Thu</div>
+                        <div class="text-center font-medium text-sm py-1">Fri</div>
+                        <div class="text-center font-medium text-sm py-1">Sat</div>
+                        <!-- Calendar days will be inserted here by JS -->
+                    </div>
+                    <div class="flex justify-end">
+                        <button id="today-btn" class="bg-blue-600 hover:bg-blue-700 text-white py-1 px-4 rounded text-sm">
+                            Today
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Settings Modal -->
+            <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+                <div class="bg-slate-800 rounded-lg p-6 w-full max-w-md">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold">Settings</h2>
+                        <button id="close-settings" class="text-slate-400 hover:text-white">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <h3 class="font-medium mb-2">Time Format</h3>
+                            <div class="flex space-x-4">
+                                <label class="flex items-center">
+                                    <input type="radio" name="time-format" value="12" class="mr-2">
+                                    <span>12-hour (AM/PM)</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="radio" name="time-format" value="24" class="mr-2">
+                                    <span>24-hour</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h3 class="font-medium mb-2">Daily Available Time</h3>
+                            <div class="flex items-center">
+                                <input type="number" id="daily-hours" min="1" max="24" class="bg-slate-700 border border-slate-600 rounded-md p-2 w-16 mr-2">
+                                <span>hours</span>
+                                <input type="number" id="daily-minutes" min="0" max="59" class="bg-slate-700 border border-slate-600 rounded-md p-2 w-16 ml-4 mr-2">
+                                <span>minutes</span>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h3 class="font-medium mb-2">Pomodoro Settings</h3>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm text-slate-400 mb-1">Work Duration (min)</label>
+                                    <input type="number" id="pomodoro-work" min="1" max="120" class="bg-slate-700 border border-slate-600 rounded-md p-2 w-full">
+                                </div>
+                                <div>
+                                    <label class="block text-sm text-slate-400 mb-1">Break Duration (min)</label>
+                                    <input type="number" id="pomodoro-break" min="1" max="30" class="bg-slate-700 border border-slate-600 rounded-md p-2 w-full">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="pt-4 border-t border-slate-700">
+                            <button id="save-settings" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition">
+                                Save Settings
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Time Left Countdown -->
+            <div class="bg-slate-800 rounded-lg p-6 mb-6 shadow-lg">
+                <h2 class="text-lg font-semibold mb-4 flex items-center">
+                    <i class="far fa-clock mr-2 text-blue-400"></i>
+                    <span>Time Left Today</span>
+                </h2>
+                <div id="time-left" class="text-4xl font-mono text-center py-4">
+                    --:--:--
+                </div>
+                <div class="flex justify-center space-x-4 mt-2">
+                    <button id="start-day-btn" class="bg-blue-600 hover:bg-blue-700 text-white py-1 px-4 rounded text-sm">
+                        Start Day
+                    </button>
+                    <button id="reset-day-btn" class="bg-slate-700 hover:bg-slate-600 text-white py-1 px-4 rounded text-sm">
+                        Reset
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Pomodoro Timer -->
+            <div class="bg-slate-800 rounded-lg p-6 mb-6 shadow-lg">
+                <div class="flex border-b border-slate-700 mb-4">
+                    <button id="pomodoro-work-tab" class="pomodoro-tab active px-4 py-2 font-medium">Work</button>
+                    <button id="pomodoro-break-tab" class="pomodoro-tab px-4 py-2 font-medium">Break</button>
+                </div>
+                
+                <div id="pomodoro-timer" class="text-4xl font-mono text-center py-4">
+                    25:00
+                </div>
+                
+                <div class="flex justify-center space-x-4 mt-2">
+                    <button id="pomodoro-start" class="bg-blue-600 hover:bg-blue-700 text-white py-1 px-4 rounded text-sm">
+                        <i class="fas fa-play mr-1"></i> Start
+                    </button>
+                    <button id="pomodoro-pause" class="bg-slate-700 hover:bg-slate-600 text-white py-1 px-4 rounded text-sm">
+                        <i class="fas fa-pause mr-1"></i> Pause
+                    </button>
+                    <button id="pomodoro-reset" class="bg-slate-700 hover:bg-slate-600 text-white py-1 px-4 rounded text-sm">
+                        <i class="fas fa-redo mr-1"></i> Reset
+                    </button>
+                </div>
+                
+                <div class="mt-6 pt-4 border-t border-slate-700 text-center">
+                    <p class="text-sm text-slate-400">Today's Work Duration</p>
+                    <p id="work-today" class="text-xl font-medium">0h 0m</p>
+                </div>
+            </div>
+            
+            <!-- Task Summary -->
+            <div class="bg-slate-800 rounded-lg p-4 mb-6 shadow-lg flex justify-between items-center">
+                <div>
+                    <h2 class="font-medium">Today's Tasks</h2>
+                    <p id="task-summary" class="text-sm text-slate-400">0 tasks • 0h 0m</p>
+                </div>
+                <button id="add-task-btn" class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+            
+            <!-- Add Task Form (hidden by default) -->
+            <div id="add-task-form" class="bg-slate-800 rounded-lg p-6 mb-6 shadow-lg hidden">
+                <h2 class="text-lg font-semibold mb-4">Add New Task</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-1">Task Name</label>
+                        <input type="text" id="task-name" class="w-full bg-slate-700 border border-slate-600 rounded-md p-2">
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-1">Start Time</label>
+                            <input type="time" id="task-start" class="w-full bg-slate-700 border border-slate-600 rounded-md p-2 time-input">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-1">End Time</label>
+                            <input type="time" id="task-end" class="w-full bg-slate-700 border border-slate-600 rounded-md p-2 time-input">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-1">Status</label>
+                        <select id="task-status" class="task-status-select w-full p-2">
+                            <option value="pending">Pending</option>
+                            <option value="in-progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                            <option value="delayed">Delayed</option>
+                        </select>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3 pt-2">
+                        <button id="cancel-task-btn" class="bg-slate-700 hover:bg-slate-600 text-white py-2 px-4 rounded-md transition">
+                            Cancel
+                        </button>
+                        <button id="save-task-btn" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition">
+                            Save Task
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Task List -->
+            <div id="task-list" class="space-y-3">
+                <!-- Tasks will be inserted here by JS -->
+                <div class="bg-slate-800 rounded-lg p-4 text-center text-slate-500">
+                    No tasks scheduled for today. Click "+" to add one.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // App State
+        const state = {
+            authenticated: false,
+            currentUser: null,
+            tasks: {},
+            settings: {
+                timeFormat: '12',
+                dailyHours: 16,
+                dailyMinutes: 0,
+                pomodoroWork: 25,
+                pomodoroBreak: 5
+            },
+            currentDate: new Date(),
+            selectedDate: new Date(),
+            dayStartTime: null,
+            pomodoroMode: 'work',
+            pomodoroActive: false,
+            pomodoroTimeLeft: 25 * 60,
+            pomodoroInterval: null,
+            workTimeToday: 0,
+            timeLeftInterval: null
+        };
+
+        // DOM Elements
+        const elements = {
+            authScreen: document.getElementById('auth-screen'),
+            mainApp: document.getElementById('main-app'),
+            loginForm: document.getElementById('login-form'),
+            newAccountForm: document.getElementById('new-account-form'),
+            generatedKey: document.getElementById('generated-key'),
+            privateKeyInput: document.getElementById('private-key'),
+            loginBtn: document.getElementById('login-btn'),
+            newAccountBtn: document.getElementById('new-account-btn'),
+            copyKeyBtn: document.getElementById('copy-key-btn'),
+            continueBtn: document.getElementById('continue-btn'),
+            logoutBtn: document.getElementById('logout-btn'),
+            currentDate: document.getElementById('current-date'),
+            calendarModal: document.getElementById('calendar-modal'),
+            calendarToggle: document.getElementById('calendar-toggle'),
+            closeCalendar: document.getElementById('close-calendar'),
+            prevMonth: document.getElementById('prev-month'),
+            nextMonth: document.getElementById('next-month'),
+            currentMonth: document.getElementById('current-month'),
+            calendarGrid: document.getElementById('calendar-grid'),
+            todayBtn: document.getElementById('today-btn'),
+            settingsModal: document.getElementById('settings-modal'),
+            settingsToggle: document.getElementById('settings-toggle'),
+            closeSettings: document.getElementById('close-settings'),
+            timeFormatRadios: document.getElementsByName('time-format'),
+            dailyHours: document.getElementById('daily-hours'),
+            dailyMinutes: document.getElementById('daily-minutes'),
+            pomodoroWork: document.getElementById('pomodoro-work'),
+            pomodoroBreak: document.getElementById('pomodoro-break'),
+            saveSettings: document.getElementById('save-settings'),
+            timeLeft: document.getElementById('time-left'),
+            startDayBtn: document.getElementById('start-day-btn'),
+            resetDayBtn: document.getElementById('reset-day-btn'),
+            pomodoroTimer: document.getElementById('pomodoro-timer'),
+            pomodoroWorkTab: document.getElementById('pomodoro-work-tab'),
+            pomodoroBreakTab: document.getElementById('pomodoro-break-tab'),
+            pomodoroStart: document.getElementById('pomodoro-start'),
+            pomodoroPause: document.getElementById('pomodoro-pause'),
+            pomodoroReset: document.getElementById('pomodoro-reset'),
+            workToday: document.getElementById('work-today'),
+            taskSummary: document.getElementById('task-summary'),
+            addTaskBtn: document.getElementById('add-task-btn'),
+            addTaskForm: document.getElementById('add-task-form'),
+            taskName: document.getElementById('task-name'),
+            taskStart: document.getElementById('task-start'),
+            taskEnd: document.getElementById('task-end'),
+            taskStatus: document.getElementById('task-status'),
+            cancelTaskBtn: document.getElementById('cancel-task-btn'),
+            saveTaskBtn: document.getElementById('save-task-btn'),
+            taskList: document.getElementById('task-list'),
+            editingTaskId: null
+        };
+
+        // Initialize the app
+        function init() {
+            loadSettings();
+            checkAuth();
+            setupEventListeners();
+            updateCurrentDateDisplay();
+            
+            // Check if PWA is installed
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/service-worker.js').then(registration => {
+                        console.log('ServiceWorker registration successful');
+                    }).catch(err => {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+                });
+            }
+        }
+
+        // Check authentication status
+        function checkAuth() {
+            const privateKey = localStorage.getItem('privateKey');
+            if (privateKey) {
+                state.currentUser = privateKey;
+                state.authenticated = true;
+                showMainApp();
+            } else {
+                showAuthScreen();
+            }
+        }
+
+        // Show authentication screen
+        function showAuthScreen() {
+            elements.authScreen.classList.remove('hidden');
+            elements.mainApp.classList.add('hidden');
+        }
+
+        // Show main app
+        function showMainApp() {
+            elements.authScreen.classList.add('hidden');
+            elements.mainApp.classList.remove('hidden');
+            loadTasks();
+            updateUI();
+        }
+
+        // Generate a random private key
+        function generatePrivateKey() {
+            const array = new Uint8Array(32);
+            window.crypto.getRandomValues(array);
+            return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+        }
+
+        // Load settings from localStorage
+        function loadSettings() {
+            const savedSettings = localStorage.getItem('settings');
+            if (savedSettings) {
+                state.settings = JSON.parse(savedSettings);
+            }
+            
+            // Update settings UI
+            if (state.settings.timeFormat === '12') {
+                elements.timeFormatRadios[0].checked = true;
+            } else {
+                elements.timeFormatRadios[1].checked = true;
+            }
+            
+            elements.dailyHours.value = state.settings.dailyHours;
+            elements.dailyMinutes.value = state.settings.dailyMinutes;
+            elements.pomodoroWork.value = state.settings.pomodoroWork;
+            elements.pomodoroBreak.value = state.settings.pomodoroBreak;
+            
+            // Initialize pomodoro timer
+            state.pomodoroTimeLeft = state.settings.pomodoroWork * 60;
+            updatePomodoroDisplay();
+        }
+
+        // Save settings to localStorage
+        function saveSettings() {
+            state.settings.timeFormat = document.querySelector('input[name="time-format"]:checked').value;
+            state.settings.dailyHours = parseInt(elements.dailyHours.value) || 16;
+            state.settings.dailyMinutes = parseInt(elements.dailyMinutes.value) || 0;
+            state.settings.pomodoroWork = parseInt(elements.pomodoroWork.value) || 25;
+            state.settings.pomodoroBreak = parseInt(elements.pomodoroBreak.value) || 5;
+            
+            localStorage.setItem('settings', JSON.stringify(state.settings));
+            
+            // Update pomodoro timer if needed
+            if (state.pomodoroMode === 'work') {
+                state.pomodoroTimeLeft = state.settings.pomodoroWork * 60;
+            } else {
+                state.pomodoroTimeLeft = state.settings.pomodoroBreak * 60;
+            }
+            
+            updatePomodoroDisplay();
+            updateUI();
+        }
+
+        // Load tasks from localStorage
+        function loadTasks() {
+            const tasks = localStorage.getItem(`tasks_${state.currentUser}`);
+            if (tasks) {
+                state.tasks = JSON.parse(tasks);
+            }
+        }
+
+        // Save tasks to localStorage
+        function saveTasks() {
+            localStorage.setItem(`tasks_${state.currentUser}`, JSON.stringify(state.tasks));
+            updateUI();
+        }
+
+        // Format time based on user preference
+        function formatTime(timeStr, includeSeconds = false) {
+            if (state.settings.timeFormat === '24') {
+                return timeStr + (includeSeconds ? ':00' : '');
+            }
+            
+            // Convert to 12-hour format
+            const [hours, minutes] = timeStr.split(':');
+            let h = parseInt(hours);
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12;
+            h = h ? h : 12; // the hour '0' should be '12'
+            return `${h}:${minutes} ${ampm}`;
+        }
+
+        // Format duration (minutes) to "Xh Ym" format
+        function formatDuration(minutes) {
+            const hours = Math.floor(minutes / 60);
+            const mins = minutes % 60;
+            return `${hours}h ${mins}m`;
+        }
+
+        // Update the current date display
+        function updateCurrentDateDisplay() {
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            elements.currentDate.textContent = state.currentDate.toLocaleDateString(undefined, options);
+        }
+
+        // Update the entire UI based on current state
+        function updateUI() {
+            updateTaskList();
+            updateTaskSummary();
+            updateWorkTodayDisplay();
+            updateCalendar();
+        }
+
+        // Update the task list display
+        function updateTaskList() {
+            const dateKey = formatDateKey(state.selectedDate);
+            const tasksForDate = state.tasks[dateKey] || [];
+            
+            elements.taskList.innerHTML = '';
+            
+            if (tasksForDate.length === 0) {
+                elements.taskList.innerHTML = `
+                    <div class="bg-slate-800 rounded-lg p-4 text-center text-slate-500">
+                        No tasks scheduled for ${state.selectedDate.toDateString() === new Date().toDateString() ? 'today' : 'this day'}. Click "+" to add one.
+                    </div>
+                `;
+                return;
+            }
+            
+            // Sort tasks by start time
+            tasksForDate.sort((a, b) => {
+                return timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
+            });
+            
+            tasksForDate.forEach(task => {
+                const startTimeFormatted = formatTime(task.startTime);
+                const endTimeFormatted = formatTime(task.endTime);
+                const duration = calculateDuration(task.startTime, task.endTime);
+                
+                let statusClass = '';
+                switch (task.status) {
+                    case 'pending': statusClass = 'text-yellow-400'; break;
+                    case 'in-progress': statusClass = 'text-blue-400'; break;
+                    case 'completed': statusClass = 'text-green-400'; break;
+                    case 'delayed': statusClass = 'text-red-400'; break;
+                }
+                
+                const taskElement = document.createElement('div');
+                taskElement.className = `task-item bg-slate-800 rounded-lg p-4 shadow border-l-4 ${getStatusBorderClass(task.status)}`;
+                taskElement.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="font-medium">${task.name}</h3>
+                        <span class="text-sm ${statusClass}">${formatStatus(task.status)}</span>
+                    </div>
+                    <div class="flex justify-between text-sm text-slate-400">
+                        <div>
+                            <span>${startTimeFormatted} - ${endTimeFormatted}</span>
+                            <span class="mx-2">•</span>
+                            <span>${duration}h ${calculateRemainingMinutes(task.startTime, task.endTime)}m</span>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button class="edit-task-btn text-blue-400 hover:text-blue-300" data-id="${task.id}">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="delete-task-btn text-red-400 hover:text-red-300" data-id="${task.id}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                elements.taskList.appendChild(taskElement);
+            });
+            
+            // Add event listeners to the new buttons
+            document.querySelectorAll('.edit-task-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    editTask(e.target.getAttribute('data-id') || e.target.parentElement.getAttribute('data-id'));
+                });
+            });
+            
+            document.querySelectorAll('.delete-task-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    deleteTask(e.target.getAttribute('data-id') || e.target.parentElement.getAttribute('data-id'));
+                });
+            });
+        }
+
+        function getStatusBorderClass(status) {
+            switch (status) {
+                case 'pending': return 'border-yellow-500';
+                case 'in-progress': return 'border-blue-500';
+                case 'completed': return 'border-green-500';
+                case 'delayed': return 'border-red-500';
+                default: return 'border-slate-700';
+            }
+        }
+
+        function formatStatus(status) {
+            switch (status) {
+                case 'pending': return 'Pending';
+                case 'in-progress': return 'In Progress';
+                case 'completed': return 'Completed';
+                case 'delayed': return 'Delayed';
+                default: return status;
+            }
+        }
+
+        // Update the task summary display
+        function updateTaskSummary() {
+            const dateKey = formatDateKey(state.selectedDate);
+            const tasksForDate = state.tasks[dateKey] || [];
+            
+            let totalMinutes = 0;
+            tasksForDate.forEach(task => {
+                totalMinutes += calculateDuration(task.startTime, task.endTime) * 60 + calculateRemainingMinutes(task.startTime, task.endTime);
+            });
+            
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            
+            elements.taskSummary.textContent = `${tasksForDate.length} tasks • ${hours}h ${minutes}m`;
+        }
+
+        // Update the "Worked Today" display
+        function updateWorkTodayDisplay() {
+            elements.workToday.textContent = formatDuration(state.workTimeToday);
+        }
+
+        // Calculate duration between two times in hours
+        function calculateDuration(startTime, endTime) {
+            const start = timeToMinutes(startTime);
+            const end = timeToMinutes(endTime);
+            return Math.floor((end - start) / 60);
+        }
+
+        // Calculate remaining minutes after full hours
+        function calculateRemainingMinutes(startTime, endTime) {
+            const start = timeToMinutes(startTime);
+            const end = timeToMinutes(endTime);
+            return (end - start) % 60;
+        }
+
+        // Convert time string (HH:MM) to total minutes
+        function timeToMinutes(timeStr) {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours * 60 + minutes;
+        }
+
+        // Format date as YYYY-MM-DD key
+        function formatDateKey(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        // Add a new task
+        function addTask() {
+            const name = elements.taskName.value.trim();
+            const startTime = elements.taskStart.value;
+            const endTime = elements.taskEnd.value;
+            const status = elements.taskStatus.value;
+            
+            if (!name || !startTime || !endTime) {
+                alert('Please fill in all fields');
+                return;
+            }
+            
+            if (timeToMinutes(startTime) >= timeToMinutes(endTime)) {
+                alert('End time must be after start time');
+                return;
+            }
+            
+            const dateKey = formatDateKey(state.selectedDate);
+            if (!state.tasks[dateKey]) {
+                state.tasks[dateKey] = [];
+            }
+            
+            const newTask = {
+                id: Date.now().toString(),
+                name,
+                startTime,
+                endTime,
+                status,
+                date: dateKey
+            };
+            
+            if (elements.editingTaskId) {
+                // Update existing task
+                const taskIndex = state.tasks[dateKey].findIndex(t => t.id === elements.editingTaskId);
+                if (taskIndex !== -1) {
+                    state.tasks[dateKey][taskIndex] = newTask;
+                }
+                elements.editingTaskId = null;
+            } else {
+                // Add new task
+                state.tasks[dateKey].push(newTask);
+            }
+            
+            saveTasks();
+            hideAddTaskForm();
+        }
+
+        // Edit an existing task
+        function editTask(taskId) {
+            const dateKey = formatDateKey(state.selectedDate);
+            const task = state.tasks[dateKey].find(t => t.id === taskId);
+            
+            if (task) {
+                elements.taskName.value = task.name;
+                elements.taskStart.value = task.startTime;
+                elements.taskEnd.value = task.endTime;
+                elements.taskStatus.value = task.status;
+                elements.editingTaskId = task.id;
+                
+                showAddTaskForm();
+            }
+        }
+
+        // Delete a task
+        function deleteTask(taskId) {
+            if (confirm('Are you sure you want to delete this task?')) {
+                const dateKey = formatDateKey(state.selectedDate);
+                state.tasks[dateKey] = state.tasks[dateKey].filter(t => t.id !== taskId);
+                saveTasks();
+            }
+        }
+
+        // Show the add task form
+        function showAddTaskForm() {
+            if (elements.editingTaskId) {
+                elements.saveTaskBtn.textContent = 'Update Task';
+            } else {
+                // Reset form for new task
+                elements.taskName.value = '';
+                const now = new Date();
+                const nextHour = new Date(now.getTime() + 60 * 60 * 1000);
+                
+                elements.taskStart.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                elements.taskEnd.value = `${String(nextHour.getHours()).padStart(2, '0')}:${String(nextHour.getMinutes()).padStart(2, '0')}`;
+                elements.taskStatus.value = 'pending';
+                elements.editingTaskId = null;
+                
+                elements.saveTaskBtn.textContent = 'Save Task';
+            }
+            
+            elements.addTaskForm.classList.remove('hidden');
+            elements.addTaskBtn.classList.add('hidden');
+        }
+
+        // Hide the add task form
+        function hideAddTaskForm() {
+            elements.addTaskForm.classList.add('hidden');
+            elements.addTaskBtn.classList.remove('hidden');
+        }
+
+        // Update the calendar display
+        function updateCalendar() {
+            const year = state.selectedDate.getFullYear();
+            const month = state.selectedDate.getMonth();
+            
+            elements.currentMonth.textContent = new Date(year, month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+            
+            // Clear the calendar grid (except day headers)
+            while (elements.calendarGrid.children.length > 7) {
+                elements.calendarGrid.removeChild(elements.calendarGrid.lastChild);
+            }
+            
+            // Get first day of month and total days in month
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            // Add empty cells for days before the first day of the month
+            for (let i = 0; i < firstDay; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'text-center py-2 text-slate-600';
+                elements.calendarGrid.appendChild(cell);
+            }
+            
+            // Add cells for each day of the month
+            for (let day = 1; day <= daysInMonth; day++) {
+                const cell = document.createElement('div');
+                const date = new Date(year, month, day);
+                const dateKey = formatDateKey(date);
+                const hasTasks = state.tasks[dateKey] && state.tasks[dateKey].length > 0;
+                
+                cell.className = 'text-center py-2 cursor-pointer hover:bg-slate-700 rounded';
+                cell.textContent = day;
+                
+                // Highlight current day
+                if (date.toDateString() === new Date().toDateString()) {
+                    cell.classList.add('bg-blue-900', 'text-white');
+                }
+                
+                // Highlight selected day
+                if (date.toDateString() === state.selectedDate.toDateString()) {
+                    cell.classList.add('border', 'border-blue-500');
+                }
+                
+                // Add indicator if day has tasks
+                if (hasTasks) {
+                    const indicator = document.createElement('div');
+                    indicator.className = 'w-1 h-1 bg-blue-400 rounded-full mx-auto mt-1';
+                    cell.appendChild(indicator);
+                }
+                
+                cell.addEventListener('click', () => {
+                    state.selectedDate = date;
+                    updateUI();
+                    elements.calendarModal.classList.add('hidden');
+                });
+                
+                elements.calendarGrid.appendChild(cell);
+            }
+        }
+
+        // Start the time left countdown
+        function startDayTimer() {
+            if (state.timeLeftInterval) {
+                clearInterval(state.timeLeftInterval);
+            }
+            
+            const totalMinutes = state.settings.dailyHours * 60 + state.settings.dailyMinutes;
+            let remainingSeconds = totalMinutes * 60;
+            
+            state.dayStartTime = new Date();
+            
+            // Update immediately
+            updateTimeLeftDisplay(remainingSeconds);
+            
+            // Update every second
+            state.timeLeftInterval = setInterval(() => {
+                remainingSeconds--;
+                updateTimeLeftDisplay(remainingSeconds);
+                
+                if (remainingSeconds <= 0) {
+                    clearInterval(state.timeLeftInterval);
+                    elements.timeLeft.classList.add('text-red-400');
+                }
+            }, 1000);
+        }
+
+        // Update the time left display
+        function updateTimeLeftDisplay(totalSeconds) {
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            
+            elements.timeLeft.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            
+            if (totalSeconds <= 0) {
+                elements.timeLeft.textContent = '00:00:00';
+            }
+        }
+
+        // Reset the time left countdown
+        function resetDayTimer() {
+            if (state.timeLeftInterval) {
+                clearInterval(state.timeLeftInterval);
+                state.timeLeftInterval = null;
+            }
+            
+            elements.timeLeft.textContent = '--:--:--';
+            elements.timeLeft.classList.remove('text-red-400');
+        }
+
+        // Start the Pomodoro timer
+        function startPomodoroTimer() {
+            if (state.pomodoroInterval) {
+                clearInterval(state.pomodoroInterval);
+            }
+            
+            state.pomodoroActive = true;
+            elements.pomodoroTimer.classList.add('timer-active');
+            
+            // Update immediately
+            updatePomodoroDisplay();
+            
+            // Update every second
+            state.pomodoroInterval = setInterval(() => {
+                state.pomodoroTimeLeft--;
+                updatePomodoroDisplay();
+                
+                if (state.pomodoroTimeLeft <= 0) {
+                    clearInterval(state.pomodoroInterval);
+                    state.pomodoroActive = false;
+                    elements.pomodoroTimer.classList.remove('timer-active');
+                    
+                    // Play sound
+                    const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3');
+                    audio.play();
+                    
+                    // Switch mode
+                    if (state.pomodoroMode === 'work') {
+                        // Add to work time
+                        state.workTimeToday += state.settings.pomodoroWork;
+                        updateWorkTodayDisplay();
+                        
+                        // Switch to break
+                        switchToBreakMode();
+                    } else {
+                        // Switch to work
+                        switchToWorkMode();
+                    }
+                    
+                    // Notify user
+                    const notificationTitle = state.pomodoroMode === 'work' ? 'Break Time!' : 'Work Time!';
+                    const notificationOptions = {
+                        body: state.pomodoroMode === 'work' 
+                            ? `Take a ${state.settings.pomodoroBreak} minute break` 
+                            : `Time to work for ${state.settings.pomodoroWork} minutes`,
+                        icon: '/assets/icon-192x192.png'
+                    };
+                    
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        new Notification(notificationTitle, notificationOptions);
+                    }
+                }
+            }, 1000);
+        }
+
+        // Pause the Pomodoro timer
+        function pausePomodoroTimer() {
+            if (state.pomodoroInterval) {
+                clearInterval(state.pomodoroInterval);
+                state.pomodoroInterval = null;
+                state.pomodoroActive = false;
+                elements.pomodoroTimer.classList.remove('timer-active');
+            }
+        }
+
+        // Reset the Pomodoro timer
+        function resetPomodoroTimer() {
+            pausePomodoroTimer();
+            
+            if (state.pomodoroMode === 'work') {
+                state.pomodoroTimeLeft = state.settings.pomodoroWork * 60;
+            } else {
+                state.pomodoroTimeLeft = state.settings.pomodoroBreak * 60;
+            }
+            
+            updatePomodoroDisplay();
+        }
+
+        // Update the Pomodoro display
+        function updatePomodoroDisplay() {
+            const minutes = Math.floor(state.pomodoroTimeLeft / 60);
+            const seconds = state.pomodoroTimeLeft % 60;
+            
+            elements.pomodoroTimer.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        // Switch to work mode
+        function switchToWorkMode() {
+            state.pomodoroMode = 'work';
+            state.pomodoroTimeLeft = state.settings.pomodoroWork * 60;
+            elements.pomodoroWorkTab.classList.add('active');
+            elements.pomodoroBreakTab.classList.remove('active');
+            updatePomodoroDisplay();
+        }
+
+        // Switch to break mode
+        function switchToBreakMode() {
+            state.pomodoroMode = 'break';
+            state.pomodoroTimeLeft = state.settings.pomodoroBreak * 60;
+            elements.pomodoroWorkTab.classList.remove('active');
+            elements.pomodoroBreakTab.classList.add('active');
+            updatePomodoroDisplay();
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Auth screen
+            elements.newAccountBtn.addEventListener('click', () => {
+                const privateKey = generatePrivateKey();
+                elements.generatedKey.textContent = privateKey;
+                elements.loginForm.classList.add('hidden');
+                elements.newAccountForm.classList.remove('hidden');
+            });
+            
+            elements.copyKeyBtn.addEventListener('click', () => {
+                navigator.clipboard.writeText(elements.generatedKey.textContent)
+                    .then(() => {
+                        elements.copyKeyBtn.innerHTML = '<i class="fas fa-check mr-1"></i> Copied!';
+                        setTimeout(() => {
+                            elements.copyKeyBtn.innerHTML = '<i class="far fa-copy mr-1"></i> Copy to Clipboard';
+                        }, 2000);
+                    });
+            });
+            
+            elements.continueBtn.addEventListener('click', () => {
+                const privateKey = elements.generatedKey.textContent;
+                localStorage.setItem('privateKey', privateKey);
+                state.currentUser = privateKey;
+                state.authenticated = true;
+                showMainApp();
+            });
+            
+            elements.loginBtn.addEventListener('click', () => {
+                const privateKey = elements.privateKeyInput.value.trim();
+                if (privateKey) {
+                    localStorage.setItem('privateKey', privateKey);
+                    state.currentUser = privateKey;
+                    state.authenticated = true;
+                    showMainApp();
+                } else {
+                    alert('Please enter your private key');
+                }
+            });
+            
+            // Main app
+            elements.logoutBtn.addEventListener('click', () => {
+                if (confirm('Are you sure you want to log out?')) {
+                    localStorage.removeItem('privateKey');
+                    state.authenticated = false;
+                    state.currentUser = null;
+                    showAuthScreen();
+                    resetDayTimer();
+                    pausePomodoroTimer();
+                }
+            });
+            
+            // Calendar
+            elements.calendarToggle.addEventListener('click', () => {
+                elements.calendarModal.classList.remove('hidden');
+            });
+            
+            elements.closeCalendar.addEventListener('click', () => {
+                elements.calendarModal.classList.add('hidden');
+            });
+            
+            elements.prevMonth.addEventListener('click', () => {
+                state.selectedDate = new Date(state.selectedDate.getFullYear(), state.selectedDate.getMonth() - 1, 1);
+                updateCalendar();
+            });
+            
+            elements.nextMonth.addEventListener('click', () => {
+                state.selectedDate = new Date(state.selectedDate.getFullYear(), state.selectedDate.getMonth() + 1, 1);
+                updateCalendar();
+            });
+            
+            elements.todayBtn.addEventListener('click', () => {
+                state.selectedDate = new Date();
+                updateUI();
+                elements.calendarModal.classList.add('hidden');
+            });
+            
+            // Settings
+            elements.settingsToggle.addEventListener('click', () => {
+                elements.settingsModal.classList.remove('hidden');
+            });
+            
+            elements.closeSettings.addEventListener('click', () => {
+                elements.settingsModal.classList.add('hidden');
+            });
+            
+            elements.saveSettings.addEventListener('click', () => {
+                saveSettings();
+                elements.settingsModal.classList.add('hidden');
+            });
+            
+            // Time left
+            elements.startDayBtn.addEventListener('click', startDayTimer);
+            elements.resetDayBtn.addEventListener('click', resetDayTimer);
+            
+            // Pomodoro
+            elements.pomodoroWorkTab.addEventListener('click', switchToWorkMode);
+            elements.pomodoroBreakTab.addEventListener('click', switchToBreakMode);
+            elements.pomodoroStart.addEventListener('click', startPomodoroTimer);
+            elements.pomodoroPause.addEventListener('click', pausePomodoroTimer);
+            elements.pomodoroReset.addEventListener('click', resetPomodoroTimer);
+            
+            // Tasks
+            elements.addTaskBtn.addEventListener('click', showAddTaskForm);
+            elements.cancelTaskBtn.addEventListener('click', hideAddTaskForm);
+            elements.saveTaskBtn.addEventListener('click', addTask);
+            
+            // Request notification permission
+            if ('Notification' in window) {
+                Notification.requestPermission();
+            }
+        }
+
+        // Initialize the app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/service-worker.js').then(function(registration) {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                }, function(err) {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
+    </script>
+
+    <!-- Manifest -->
+    <script>
+        const manifest = {
+            "name": "TimeBlocks",
+            "short_name": "TimeBlocks",
+            "start_url": ".",
+            "display": "standalone",
+            "background_color": "#1e293b",
+            "theme_color": "#1e293b",
+            "description": "Minimalist time management app",
+            "icons": [
+                {
+                    "src": "icon-192x192.png",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                },
+                {
+                    "src": "icon-512x512.png",
+                    "sizes": "512x512",
+                    "type": "image/png"
+                }
+            ]
+        };
+        
+        const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        document.querySelector('link[rel="manifest"]').href = manifestURL;
+    </script>
+
+    <!-- Service Worker -->
+    <script>
+        const serviceWorkerScript = `
+            const CACHE_NAME = 'timeblocks-v1';
+            const urlsToCache = [
+                '/',
+                '/index.html',
+                '/styles.css',
+                '/app.js',
+                '/icon-192x192.png',
+                '/icon-512x512.png'
+            ];
+
+            self.addEventListener('install', event => {
+                event.waitUntil(
+                    caches.open(CACHE_NAME)
+                        .then(cache => {
+                            return cache.addAll(urlsToCache);
+                        })
+                );
+            });
+
+            self.addEventListener('fetch', event => {
+                event.respondWith(
+                    caches.match(event.request)
+                        .then(response => {
+                            if (response) {
+                                return response;
+                            }
+                            return fetch(event.request);
+                        })
+                );
+            });
+        `;
+        
+        const swBlob = new Blob([serviceWorkerScript], {type: 'application/javascript'});
+        const swURL = URL.createObjectURL(swBlob);
+        
+        // This would normally be in a separate service-worker.js file
+        navigator.serviceWorker.register(swURL)
+            .then(registration => console.log('SW registered'))
+            .catch(err => console.log('SW registration failed: ', err));
+    </script>
+<p style="border-radius: 8px; text-align: center; font-size: 12px; color: #fff; margin-top: 16px;position: fixed; left: 8px; bottom: 8px; z-index: 10; background: rgba(0, 0, 0, 0.8); padding: 4px 8px;">Made with <img src="https://enzostvs-deepsite.hf.space/logo.svg" alt="DeepSite Logo" style="width: 16px; height: 16px; vertical-align: middle;display:inline-block;margin-right:3px;filter:brightness(0) invert(1);"><a href="https://enzostvs-deepsite.hf.space" style="color: #fff;text-decoration: underline;" target="_blank" >DeepSite</a> - 🧬 <a href="https://enzostvs-deepsite.hf.space?remix=Ahsanx1/xdd" style="color: #fff;text-decoration: underline;" target="_blank" >Remix</a></p></body>
 </html>
